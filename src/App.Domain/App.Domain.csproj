@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>App.Domain</RootNamespace>
+    <AssemblyName>App.Domain</AssemblyName>
+    <Description>Core domain model for YouTube Downloader (no external dependencies).</Description>
+  </PropertyGroup>
+</Project>

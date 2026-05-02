@@ -1,0 +1,66 @@
+## Build
+**/bin/
+**/obj/
+artifacts/
+[Bb]uild/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Ll]og/
+[Ll]ogs/
+
+## Visual Studio / Rider
+.vs/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+*.sln.docstates
+*.rsuser
+.idea/
+
+## Test
+TestResults/
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+
+## NuGet
+*.nupkg
+*.snupkg
+**/packages/*
+!**/packages/build/
+
+## Windows / WinUI
+*.appx
+*.appxbundle
+*.msix
+*.msixbundle
+*.pfx
+*.publishsettings
+Package.StoreAssociation.xml
+AppPackages/
+BundleArtifacts/
+
+## Secrets & local config
+appsettings.*.local.json
+secrets.json
+*.local.*
+
+## OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+## Misc
+*.log
+*.tmp
+*.temp
+*.cache
