@@ -1,0 +1,59 @@
+name: CI and Release
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    name: Build and Test
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore .\YouTubeDownloader.sln
+
+      - name: Build (Release)
+        run: dotnet build .\YouTubeDownloader.sln -c Release --no-restore
+
+      - name: Test (Release)
+        run: dotnet test .\YouTubeDownloader.sln -c Release --no-build
+
+  release:
+    name: Publish Portable and Create Release
+    runs-on: windows-latest
+    needs: build-test
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Publish portable zip
+        shell: pwsh
+        run: .\scripts\publish-release.ps1
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/YouTubeDownloader-portable-win-x64.zip
+          generate_release_notes: true
