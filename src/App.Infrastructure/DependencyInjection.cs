@@ -15,8 +15,8 @@ public static class DependencyInjection
         services.AddSingleton<IFileSystem, DefaultFileSystem>();
         services.AddSingleton<IUserPreferencesStore, JsonUserPreferencesStore>();
 
-        services.AddSingleton<IVideoMetadataService, SimulatedVideoMetadataService>();
-        services.AddSingleton<IVideoDownloadService, SimulatedVideoDownloadService>();
+        services.AddSingleton<IVideoMetadataService, YtDlpVideoMetadataService>();
+        services.AddSingleton<IVideoDownloadService, YtDlpVideoDownloadService>();
 
         return services;
     }

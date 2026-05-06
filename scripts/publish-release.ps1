@@ -11,6 +11,7 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $proj = Join-Path $root "src/App.WinUI/App.WinUI.csproj"
 $out = Join-Path $root $OutputRelative
+$bundledYtDlp = Join-Path $root "src/App.WinUI/tools/yt-dlp.exe"
 
 function Get-VsMsBuildExe {
     $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
@@ -69,6 +70,11 @@ $msbuild = Get-VsMsBuildExe
 
 if ($msbuild) {
     Write-Host "Using Visual Studio MSBuild: $msbuild"
+}
+
+if (-not (Test-Path -LiteralPath $bundledYtDlp)) {
+    Write-Warning "Bundled yt-dlp not found at: $bundledYtDlp"
+    Write-Warning "Run scripts/install-yt-dlp.ps1 to include yt-dlp in setup."
 }
 
 if ($SingleFile) {
@@ -140,6 +146,9 @@ Get-ChildItem -LiteralPath $out -Filter "*.pdb" -ErrorAction SilentlyContinue | 
 Write-Host ""
 Write-Host "Done. Main executable:"
 Write-Host "  $(Join-Path $out 'YouTubeDownloader.exe')"
+if (Test-Path -LiteralPath (Join-Path $out 'yt-dlp.exe')) {
+    Write-Host "  $(Join-Path $out 'yt-dlp.exe')"
+}
 Write-Host ""
 
 if (-not $SkipZip) {

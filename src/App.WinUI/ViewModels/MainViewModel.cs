@@ -189,7 +189,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         OutputFolder = folder ?? string.Empty;
         IsOutputFolderValid = Directory.Exists(OutputFolder.Trim());
-        AppendLog("Ready. Paste a URL and fetch metadata (simulated).", false);
+        AppendLog("Ready. Paste a URL and fetch metadata.", false);
     }
 
     private async Task PasteFromClipboardAsync()
@@ -378,7 +378,7 @@ public sealed partial class MainViewModel : ObservableObject
         IsDownloading = true;
         ProgressPercent = 0;
         StatusMessage = "Downloading…";
-        AppendLog("Starting download (simulated)…", false);
+        AppendLog("Starting download…", false);
 
         try
         {
