@@ -28,6 +28,21 @@ jobs:
       - name: Build (Release)
         run: dotnet build .\YouTubeDownloader.sln -c Release --no-restore
 
+      - name: Enforce centralized icon usage
+        shell: pwsh
+        run: |
+          $hits = rg -n "ms-appx:///Assets/" src/App.WinUI --glob "*.xaml"
+          if (-not $hits) {
+            exit 0
+          }
+
+          $violations = $hits | Where-Object { $_ -notmatch "src/App.WinUI/Resources/IconResources.xaml" }
+          if ($violations) {
+            Write-Host "Direct icon/asset paths are not allowed in view XAML. Use IconResources.xaml keys instead."
+            $violations | ForEach-Object { Write-Host $_ }
+            exit 1
+          }
+
       - name: Test (Release)
         run: dotnet test .\YouTubeDownloader.sln -c Release --no-build
 

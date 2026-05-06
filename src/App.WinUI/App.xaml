@@ -8,6 +8,7 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <controls:XamlControlsResources />
+                <ResourceDictionary Source="Resources/IconResources.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
             <conv:BooleanToVisibilityConverter x:Key="BoolToVis" />

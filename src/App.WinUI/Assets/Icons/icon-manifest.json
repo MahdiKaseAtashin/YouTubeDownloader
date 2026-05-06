@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "supportedSizes": [16, 24, 32, 48, 64, 128],
+  "themes": ["light", "dark"],
+  "icons": [
+    {
+      "key": "brand",
+      "category": "identity",
+      "sourceSvg": "src/brand.svg",
+      "generated": true,
+      "transparentBackgroundRequired": true
+    },
+    {
+      "key": "download",
+      "category": "action",
+      "sourceSvg": "src/download.svg",
+      "generated": true,
+      "transparentBackgroundRequired": true
+    },
+    {
+      "key": "folder",
+      "category": "action",
+      "sourceSvg": "src/folder.svg",
+      "generated": true,
+      "transparentBackgroundRequired": true
+    },
+    {
+      "key": "clipboard",
+      "category": "action",
+      "sourceSvg": "src/clipboard.svg",
+      "generated": true,
+      "transparentBackgroundRequired": true
+    },
+    {
+      "key": "fetch",
+      "category": "action",
+      "sourceSvg": "src/fetch.svg",
+      "generated": true,
+      "transparentBackgroundRequired": true
+    },
+    {
+      "key": "clear",
+      "category": "action",
+      "sourceSvg": "src/clear.svg",
+      "generated": true,
+      "transparentBackgroundRequired": true
+    },
+    {
+      "key": "cancel",
+      "category": "action",
+      "sourceSvg": "src/cancel.svg",
+      "generated": true,
+      "transparentBackgroundRequired": true
+    }
+  ]
+}
