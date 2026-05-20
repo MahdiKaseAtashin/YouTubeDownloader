@@ -16,7 +16,6 @@
     <PlatformTarget>x64</PlatformTarget>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <Description>YouTube Downloader desktop UI (WinUI 3, MVVM).</Description>
-    <Version>1.0.2</Version>
     <Product>YouTube Downloader</Product>
     <!-- Required for PublishSingleFile: embeds WinUI resources.pri so the UI works without VS PRI MSBuild tasks. -->
     <EnableMsixTooling>true</EnableMsixTooling>
@@ -38,6 +37,27 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>yt-dlp.exe</Link>
+    </Content>
+  </ItemGroup>
+  <ItemGroup Condition="Exists('tools\ffmpeg.exe')">
+    <Content Include="tools\ffmpeg.exe">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <Link>ffmpeg.exe</Link>
+    </Content>
+  </ItemGroup>
+  <ItemGroup Condition="Exists('tools\ffprobe.exe')">
+    <Content Include="tools\ffprobe.exe">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <Link>ffprobe.exe</Link>
+    </Content>
+  </ItemGroup>
+  <ItemGroup Condition="Exists('tools\node.exe')">
+    <Content Include="tools\node.exe">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <Link>node.exe</Link>
     </Content>
   </ItemGroup>
   <ItemGroup>

@@ -12,6 +12,8 @@ $root = Split-Path -Parent $PSScriptRoot
 $proj = Join-Path $root "src/App.WinUI/App.WinUI.csproj"
 $out = Join-Path $root $OutputRelative
 $bundledYtDlp = Join-Path $root "src/App.WinUI/tools/yt-dlp.exe"
+$bundledFfmpeg = Join-Path $root "src/App.WinUI/tools/ffmpeg.exe"
+$bundledNode = Join-Path $root "src/App.WinUI/tools/node.exe"
 
 function Get-VsMsBuildExe {
     $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
@@ -75,6 +77,16 @@ if ($msbuild) {
 if (-not (Test-Path -LiteralPath $bundledYtDlp)) {
     Write-Warning "Bundled yt-dlp not found at: $bundledYtDlp"
     Write-Warning "Run scripts/install-yt-dlp.ps1 to include yt-dlp in setup."
+}
+
+if (-not (Test-Path -LiteralPath $bundledFfmpeg)) {
+    Write-Warning "Bundled ffmpeg not found at: $bundledFfmpeg"
+    Write-Warning "Run scripts/install-ffmpeg.ps1 to include ffmpeg in setup."
+}
+
+if (-not (Test-Path -LiteralPath $bundledNode)) {
+    Write-Warning "Bundled Node.js not found at: $bundledNode"
+    Write-Warning "Run scripts/install-node.ps1 for signed-in YouTube downloads."
 }
 
 if ($SingleFile) {

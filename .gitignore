@@ -62,6 +62,9 @@ Desktop.ini
 $RECYCLE.BIN/
 .DS_Store
 
+## Bundled tools (download via scripts/install-*.ps1)
+src/App.WinUI/tools/*.exe
+
 ## Misc
 *.log
 *.tmp

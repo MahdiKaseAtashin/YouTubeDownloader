@@ -8,10 +8,12 @@ internal static class YtDlpAuthErrorClassifier
     {
         "sign in to confirm you're not a bot",
         "this video requires sign in",
-        "http error 403",
-        "requested format is not available. use --list-formats",
-        "authentication",
-        "cookies"
+        "use --cookies-from-browser",
+        "http error 401",
+        "login required",
+        "private video",
+        "members-only",
+        "join this channel"
     };
 
     public static bool IsAuthenticationFailure(string? errorText)

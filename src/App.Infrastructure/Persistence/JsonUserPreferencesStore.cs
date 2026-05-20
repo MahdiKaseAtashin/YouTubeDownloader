@@ -45,7 +45,8 @@ public sealed class JsonUserPreferencesStore : IUserPreferencesStore
                 dto?.AuthMode ?? YouTubeAuthMode.None,
                 Normalize(dto?.AuthBrowser),
                 Normalize(dto?.AuthBrowserProfile),
-                Normalize(dto?.AuthCookieFilePath));
+                Normalize(dto?.AuthCookieFilePath),
+                Normalize(dto?.AuthBrowserProfileDirectoryPath));
         }
         catch (Exception ex)
         {
@@ -71,7 +72,8 @@ public sealed class JsonUserPreferencesStore : IUserPreferencesStore
                 AuthMode = YouTubeAuthSettings.Mode,
                 AuthBrowser = YouTubeAuthSettings.Browser,
                 AuthBrowserProfile = YouTubeAuthSettings.BrowserProfile,
-                AuthCookieFilePath = YouTubeAuthSettings.CookieFilePath
+                AuthCookieFilePath = YouTubeAuthSettings.CookieFilePath,
+                AuthBrowserProfileDirectoryPath = YouTubeAuthSettings.BrowserProfileDirectoryPath
             };
             var temp = _paths.PreferencesFilePath + ".tmp";
             await using (var stream = File.Create(temp))
@@ -97,7 +99,8 @@ public sealed class JsonUserPreferencesStore : IUserPreferencesStore
                 settings.Mode,
                 Normalize(settings.Browser),
                 Normalize(settings.BrowserProfile),
-                Normalize(settings.CookieFilePath));
+                Normalize(settings.CookieFilePath),
+                Normalize(settings.BrowserProfileDirectoryPath));
 
             var dto = new PrefsDto
             {
@@ -105,7 +108,8 @@ public sealed class JsonUserPreferencesStore : IUserPreferencesStore
                 AuthMode = YouTubeAuthSettings.Mode,
                 AuthBrowser = YouTubeAuthSettings.Browser,
                 AuthBrowserProfile = YouTubeAuthSettings.BrowserProfile,
-                AuthCookieFilePath = YouTubeAuthSettings.CookieFilePath
+                AuthCookieFilePath = YouTubeAuthSettings.CookieFilePath,
+                AuthBrowserProfileDirectoryPath = YouTubeAuthSettings.BrowserProfileDirectoryPath
             };
 
             var temp = _paths.PreferencesFilePath + ".tmp";
@@ -133,5 +137,6 @@ public sealed class JsonUserPreferencesStore : IUserPreferencesStore
         public string? AuthBrowser { get; set; }
         public string? AuthBrowserProfile { get; set; }
         public string? AuthCookieFilePath { get; set; }
+        public string? AuthBrowserProfileDirectoryPath { get; set; }
     }
 }

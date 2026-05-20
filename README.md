@@ -49,7 +49,7 @@ Skip the zip: `.\scripts\publish-release.ps1 -SkipZip`
 1. Run `.\scripts\publish-release.ps1 -OutputRelative artifacts\release` (or copy from `artifacts\portable` after a default publish).
 2. Open `installer\YouTubeDownloader.iss` in Inno Setup 6.
 3. Confirm `[Files]` points at `..\artifacts\release\*`.
-4. Compile — output: `artifacts\installer\YouTubeDownloader-Setup-1.0.0.exe`.
+4. Compile — output: `artifacts\installer\YouTubeDownloader-Setup-1.0.3.exe`.
 
 ## Data locations
 

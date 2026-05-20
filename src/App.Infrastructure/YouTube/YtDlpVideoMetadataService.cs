@@ -11,10 +11,14 @@ namespace App.Infrastructure.YouTube;
 
 public sealed class YtDlpVideoMetadataService : IVideoMetadataService
 {
+    private readonly IBrowserProfileDiscovery _browserDiscovery;
     private readonly ILogger<YtDlpVideoMetadataService> _logger;
 
-    public YtDlpVideoMetadataService(ILogger<YtDlpVideoMetadataService> logger)
+    public YtDlpVideoMetadataService(
+        IBrowserProfileDiscovery browserDiscovery,
+        ILogger<YtDlpVideoMetadataService> logger)
     {
+        _browserDiscovery = browserDiscovery;
         _logger = logger;
     }
 
@@ -34,14 +38,23 @@ public sealed class YtDlpVideoMetadataService : IVideoMetadataService
             throw new InvalidOperationException("yt-dlp was not found. Bundle yt-dlp.exe with the app or install it on PATH.");
         }
 
-        var arguments = new List<string> { "--dump-single-json", "--no-warnings", "--extractor-retries", "3" };
+        authSettings = YouTubeAuthSettingsEnricher.Enrich(authSettings, _browserDiscovery);
+
+        var arguments = new List<string>
+        {
+            "--dump-single-json",
+            "--no-warnings",
+            "--ignore-no-formats-error",
+            "--extractor-retries",
+            "3"
+        };
         YtDlpAuthArgumentsBuilder.AppendAuthArguments(arguments, authSettings);
-        arguments.Add(url);
+        YtDlpJsArgumentsBuilder.AppendYouTubeExtractionSupport(arguments);
+        arguments.Add(NormalizeUrl(url));
 
         var psi = new ProcessStartInfo
         {
             FileName = ytDlp,
-            Arguments = string.Join(" ", arguments.Select(Quote)),
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -49,6 +62,10 @@ public sealed class YtDlpVideoMetadataService : IVideoMetadataService
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8
         };
+        foreach (var arg in arguments)
+        {
+            psi.ArgumentList.Add(arg);
+        }
 
         using var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
 
@@ -104,6 +121,12 @@ public sealed class YtDlpVideoMetadataService : IVideoMetadataService
         if (process.ExitCode != 0)
         {
             var error = stderr.ToString().Trim();
+            if (error.Contains("could not find firefox cookies database", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "Firefox profile path is invalid. Re-select Account (fyagig4q.default-release) and test connection again.");
+            }
+
             if (YtDlpAuthErrorClassifier.IsAuthenticationFailure(error))
             {
                 throw new InvalidOperationException(
@@ -358,6 +381,10 @@ public sealed class YtDlpVideoMetadataService : IVideoMetadataService
         return TryGetDouble(prop, out var value) ? value : null;
     }
 
-    private static string Quote(string value) =>
-        value.Contains(' ') ? $"\"{value.Replace("\"", "\\\"")}\"" : value;
+    private static string NormalizeUrl(string url)
+    {
+        var videoId = YoutubeUrlValidator.TryExtractVideoId(url);
+        return videoId is null ? url.Trim() : $"https://www.youtube.com/watch?v={videoId}";
+    }
+
 }

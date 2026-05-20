@@ -4,4 +4,5 @@ public sealed record YouTubeAuthSettings(
     YouTubeAuthMode Mode,
     string? Browser,
     string? BrowserProfile,
-    string? CookieFilePath);
+    string? CookieFilePath,
+    string? BrowserProfileDirectoryPath = null);

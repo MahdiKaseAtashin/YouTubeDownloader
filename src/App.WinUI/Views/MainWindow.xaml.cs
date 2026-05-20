@@ -1,4 +1,5 @@
 using System.IO;
+using App.Application.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -11,6 +12,7 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Title = $"YouTube Downloader v{AppVersionInfo.Display}";
         TrySetTaskbarAndTitleIcon();
         RootGrid.Loaded += (_, _) => ApplyActionIcons();
     }

@@ -71,6 +71,8 @@ public partial class App : WinUiApplication
             _host.Services.GetRequiredService<IVideoMetadataService>(),
             _host.Services.GetRequiredService<IVideoDownloadService>(),
             _host.Services.GetRequiredService<IUserPreferencesStore>(),
+            _host.Services.GetRequiredService<IBrowserProfileDiscovery>(),
+            _host.Services.GetRequiredService<IYouTubeSessionValidator>(),
             mainWindow.DispatcherQueue,
             mainWindow);
         if (mainWindow.Content is FrameworkElement root)

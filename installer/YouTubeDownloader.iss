@@ -2,7 +2,7 @@
 ; Run: scripts\publish-release.ps1 then compile this script in Inno Setup 6.
 
 #define MyAppName "YouTube Downloader"
-#define MyAppVersion "1.0.2"
+#define MyAppVersion "1.0.3"
 #define MyAppPublisher "Local"
 #define MyAppExeName "YouTubeDownloader.exe"
 

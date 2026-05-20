@@ -1,4 +1,5 @@
 using App.Application.Dtos;
+using System.IO;
 
 namespace App.Infrastructure.YouTube;
 
@@ -19,9 +20,17 @@ internal static class YtDlpAuthArgumentsBuilder
             }
 
             args.Add("--cookies-from-browser");
-            args.Add(string.IsNullOrWhiteSpace(settings.BrowserProfile)
-                ? settings.Browser.Trim()
-                : $"{settings.Browser.Trim()}:{settings.BrowserProfile.Trim()}");
+            var browser = settings.Browser.Trim();
+            var profile = settings.BrowserProfile?.Trim();
+            if (string.IsNullOrWhiteSpace(profile) && !string.IsNullOrWhiteSpace(settings.BrowserProfileDirectoryPath))
+            {
+                profile = Path.GetFileName(settings.BrowserProfileDirectoryPath.Trim().TrimEnd('\\', '/'));
+            }
+
+            args.Add(string.IsNullOrWhiteSpace(profile)
+                ? browser
+                : $"{browser}:{profile}");
+
             return;
         }
 

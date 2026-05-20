@@ -1,4 +1,5 @@
 using App.Application.Ports;
+using App.Infrastructure.Auth;
 using App.Infrastructure.FileSystem;
 using App.Infrastructure.Persistence;
 using App.Infrastructure.Paths;
@@ -17,6 +18,8 @@ public static class DependencyInjection
 
         services.AddSingleton<IVideoMetadataService, YtDlpVideoMetadataService>();
         services.AddSingleton<IVideoDownloadService, YtDlpVideoDownloadService>();
+        services.AddSingleton<IBrowserProfileDiscovery, WindowsBrowserProfileDiscovery>();
+        services.AddSingleton<IYouTubeSessionValidator, YtDlpYouTubeSessionValidator>();
 
         return services;
     }

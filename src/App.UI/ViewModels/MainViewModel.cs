@@ -31,7 +31,10 @@ public sealed partial class MainViewModel : ObservableObject
     private VideoInfoViewModel? _videoInfoSubscription;
 
     public DownloadOptionsViewModel Options { get; } = new();
+    public YouTubeAuthViewModel Auth { get; }
     public ObservableCollection<ConsoleLogLine> ActivityLog { get; } = new();
+
+    public string ActivityLogText => string.Join(Environment.NewLine, ActivityLog.Select(l => l.FormattedLine));
 
     public ICommand LoadedCommand { get; }
     public ICommand FetchInfoCommand { get; }
@@ -44,12 +47,15 @@ public sealed partial class MainViewModel : ObservableObject
     public MainViewModel(
         IVideoMetadataService metadata,
         IVideoDownloadService downloader,
-        IUserPreferencesStore preferences)
+        IUserPreferencesStore preferences,
+        IBrowserProfileDiscovery browserDiscovery,
+        IYouTubeSessionValidator sessionValidator)
     {
         _metadata = metadata;
         _downloader = downloader;
         _preferences = preferences;
         _dispatcher = System.Windows.Application.Current!.Dispatcher;
+        Auth = new YouTubeAuthViewModel(browserDiscovery, sessionValidator, preferences);
 
         LoadedCommand = new AsyncRelayCommand(InitializeAsync, () => true);
         FetchInfoCommand = new AsyncRelayCommand(FetchMetadataAsync, () => IsUrlValid && !IsFetching && !IsDownloading);
@@ -57,7 +63,11 @@ public sealed partial class MainViewModel : ObservableObject
         BrowseOutputFolderCommand = new DelegateCommand(_ => BrowseFolder(), _ => !IsDownloading);
         DownloadCommand = new AsyncRelayCommand(DownloadAsync, CanDownload);
         CancelDownloadCommand = new DelegateCommand(_ => CancelDownload(), _ => IsDownloading);
-        ClearLogCommand = new DelegateCommand(_ => ActivityLog.Clear(), _ => true);
+        ClearLogCommand = new DelegateCommand(_ =>
+        {
+            ActivityLog.Clear();
+            OnPropertyChanged(nameof(ActivityLogText));
+        }, _ => true);
 
         Options.PropertyChanged += (_, _) =>
         {
@@ -109,6 +119,13 @@ public sealed partial class MainViewModel : ObservableObject
     private bool _isDarkTheme;
 
     public bool HasVideoInfo => VideoInfo is not null;
+
+    public string AppVersion { get; } = AppVersionInfo.Display;
+
+    public string AppSubtitle =>
+        $"v{AppVersion} · Paste a link → Fetch info → Choose what to save → Download";
+
+    public string WindowTitle => $"YouTube Downloader v{AppVersion}";
 
     partial void OnIsDarkThemeChanged(bool value) => ThemeSwitcher.Apply(value);
 
@@ -183,7 +200,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         OutputFolder = folder ?? string.Empty;
         IsOutputFolderValid = Directory.Exists(OutputFolder.Trim());
-        ApplyAuthSettings(_preferences.YouTubeAuthSettings);
+        await Auth.InitializeAsync().ConfigureAwait(true);
         AppendLog("Ready. Paste a URL and fetch metadata.", false);
     }
 
@@ -246,10 +263,10 @@ public sealed partial class MainViewModel : ObservableObject
 
         try
         {
-            await SaveAuthPreferenceAsync().ConfigureAwait(true);
+            await Auth.SavePreferencesAsync().ConfigureAwait(true);
             var dto = await _metadata.FetchMetadataAsync(
                 Url.Trim(),
-                BuildAuthSettings(),
+                Auth.BuildSettings(),
                 CancellationToken.None).ConfigureAwait(true);
             var vm = MapToVideoInfo(dto);
             VideoInfo = vm;
@@ -352,9 +369,9 @@ public sealed partial class MainViewModel : ObservableObject
                 Options.DownloadThumbnail,
                 Options.DownloadSubtitles,
                 VideoInfo.SelectedSubtitleLanguage,
-                BuildAuthSettings());
+                Auth.BuildSettings());
 
-            await SaveAuthPreferenceAsync().ConfigureAwait(true);
+            await Auth.SavePreferencesAsync().ConfigureAwait(true);
 
             var progress = new Progress<DownloadProgressUpdate>(u =>
             {
@@ -362,6 +379,10 @@ public sealed partial class MainViewModel : ObservableObject
                 {
                     ProgressPercent = Math.Clamp(u.Fraction * 100.0, 0, 100);
                     StatusMessage = u.StepMessage;
+                    if (ShouldLogProgressLine(u))
+                    {
+                        AppendLog(u.StepMessage, u.IsStdErr);
+                    }
                 });
             });
 
@@ -379,7 +400,7 @@ public sealed partial class MainViewModel : ObservableObject
         catch (Exception ex)
         {
             StatusMessage = "Download failed.";
-            AppendLog(GetFriendlyError(ex.Message), true);
+            LogException(ex);
         }
         finally
         {
@@ -394,30 +415,32 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void CancelDownload() => _downloadCts?.Cancel();
 
-    private YouTubeAuthSettings BuildAuthSettings() =>
-        new(
-            Options.SelectedAuthMode,
-            Options.SelectedBrowser,
-            Options.BrowserProfile,
-            Options.CookieFilePath);
-
-    private void ApplyAuthSettings(YouTubeAuthSettings settings)
+    private static bool ShouldLogProgressLine(DownloadProgressUpdate update)
     {
-        Options.SelectedAuthMode = settings.Mode;
-        Options.SelectedBrowser = string.IsNullOrWhiteSpace(settings.Browser) ? "edge" : settings.Browser!;
-        Options.BrowserProfile = string.IsNullOrWhiteSpace(settings.BrowserProfile) ? "Default" : settings.BrowserProfile!;
-        Options.CookieFilePath = settings.CookieFilePath ?? string.Empty;
+        if (update.IsStdErr)
+        {
+            return true;
+        }
+
+        return update.StepMessage.Contains("ERROR", StringComparison.OrdinalIgnoreCase)
+            || update.StepMessage.Contains("WARNING", StringComparison.OrdinalIgnoreCase)
+            || update.StepMessage.Contains("failed", StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task SaveAuthPreferenceAsync()
+    private void LogException(Exception ex)
     {
-        try
+        AppendMultilineLog(GetFriendlyError(ex.Message), isError: true);
+        if (ex.InnerException is not null && !string.IsNullOrWhiteSpace(ex.InnerException.Message))
         {
-            await _preferences.SaveYouTubeAuthSettingsAsync(BuildAuthSettings()).ConfigureAwait(true);
+            AppendMultilineLog(ex.InnerException.Message, isError: true);
         }
-        catch (Exception ex)
+    }
+
+    private void AppendMultilineLog(string text, bool isError)
+    {
+        foreach (var line in text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries))
         {
-            AppendLog("Could not save auth preference: " + ex.Message, true);
+            AppendLog(line.Trim(), isError);
         }
     }
 
@@ -448,6 +471,7 @@ public sealed partial class MainViewModel : ObservableObject
             }
 
             ActivityLog.Add(line);
+            OnPropertyChanged(nameof(ActivityLogText));
         }
 
         if (_dispatcher.CheckAccess())

@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using App.Application.Dtos;
 using App.Application.Ports;
+using App.Application.Services;
 using Microsoft.Extensions.Logging;
 
 namespace App.Infrastructure.YouTube;
@@ -10,10 +11,14 @@ namespace App.Infrastructure.YouTube;
 public sealed class YtDlpVideoDownloadService : IVideoDownloadService
 {
     private static readonly Regex DownloadPercentRegex = new(@"\[download\]\s+(?<percent>\d{1,3}(?:\.\d+)?)%", RegexOptions.Compiled);
+    private readonly IBrowserProfileDiscovery _browserDiscovery;
     private readonly ILogger<YtDlpVideoDownloadService> _logger;
 
-    public YtDlpVideoDownloadService(ILogger<YtDlpVideoDownloadService> logger)
+    public YtDlpVideoDownloadService(
+        IBrowserProfileDiscovery browserDiscovery,
+        ILogger<YtDlpVideoDownloadService> logger)
     {
+        _browserDiscovery = browserDiscovery;
         _logger = logger;
     }
 
@@ -33,14 +38,116 @@ public sealed class YtDlpVideoDownloadService : IVideoDownloadService
             throw new InvalidOperationException("yt-dlp was not found. Bundle yt-dlp.exe with the app or install it on PATH.");
         }
 
-        var arguments = BuildArguments(request);
+        YtDlpFfmpegArgumentsBuilder.EnsureAvailableOrThrow(request);
+
+        var enrichedAuth = YouTubeAuthSettingsEnricher.Enrich(request.AuthSettings, _browserDiscovery);
+        YtDlpJsArgumentsBuilder.EnsureAvailableForBrowserCookies(enrichedAuth);
+
+        var arguments = BuildArguments(request, enrichedAuth);
         _logger.LogInformation("Starting yt-dlp download to {Folder}", request.OutputDirectory);
 
+        var result = await RunYtDlpAsync(ytDlp, request.OutputDirectory, arguments, progress, cancellationToken).ConfigureAwait(false);
+
+        if (result.ExitCode != 0)
+        {
+            var errorText = result.ErrorText;
+            if (IsYouTubeChallengeFailure(errorText) && JsRuntimeLocator.Resolve() is null)
+            {
+                throw new InvalidOperationException(
+                    "YouTube requires a JavaScript runtime for this video. Install Node.js or Deno and retry.");
+            }
+
+            if (YtDlpAuthErrorClassifier.IsAuthenticationFailure(errorText))
+            {
+                throw new InvalidOperationException(
+                    "Authentication failed or expired. Reconnect your YouTube session and retry.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(errorText))
+            {
+                throw new InvalidOperationException(errorText);
+            }
+
+            throw new InvalidOperationException($"yt-dlp failed with exit code {result.ExitCode}.");
+        }
+
+        progress.Report(new DownloadProgressUpdate(1.0, "Finished."));
+    }
+
+    private string[] BuildArguments(DownloadRequest request, YouTubeAuthSettings? authSettings)
+    {
+        var args = new List<string>
+        {
+            "--newline",
+            "--no-warnings",
+            "--ignore-errors",
+            "--ignore-no-formats-error",
+            "--restrict-filenames",
+            "--extractor-retries",
+            "3",
+            "--fragment-retries",
+            "10",
+            "--retry-sleep",
+            "1:3",
+            "-P", request.OutputDirectory,
+            "-o", "%(title).180B [%(id)s].%(ext)s"
+        };
+
+        YtDlpAuthArgumentsBuilder.AppendAuthArguments(args, authSettings);
+        YtDlpJsArgumentsBuilder.AppendYouTubeExtractionSupport(args);
+        YtDlpFfmpegArgumentsBuilder.AppendFfmpegLocationIfAvailable(args);
+
+        var formatSelector = BuildFormatSelector(request);
+        if (!string.IsNullOrWhiteSpace(formatSelector))
+        {
+            args.Add("-f");
+            args.Add(formatSelector);
+        }
+        args.Add("--merge-output-format");
+        args.Add(request.VideoContainer.Equals("WEBM", StringComparison.OrdinalIgnoreCase) ? "webm" : "mp4");
+
+        if (request.DownloadThumbnail)
+        {
+            args.Add("--write-thumbnail");
+            args.Add("--convert-thumbnails");
+            args.Add("jpg");
+        }
+
+        if (request.DownloadSubtitles)
+        {
+            args.Add("--write-subs");
+            args.Add("--convert-subs");
+            args.Add("srt");
+            args.Add("--sub-langs");
+            args.Add(string.IsNullOrWhiteSpace(request.SubtitleLanguage) ? "en" : request.SubtitleLanguage!.Trim());
+        }
+
+        if (!request.DownloadVideo)
+        {
+            args.Add("--skip-download");
+        }
+
+        args.Add(NormalizeUrl(request.SourceUrl));
+        return args.ToArray();
+    }
+
+    private static bool IsYouTubeChallengeFailure(string errorText) =>
+        errorText.Contains("No video formats found", StringComparison.OrdinalIgnoreCase) ||
+        errorText.Contains("Only images are available", StringComparison.OrdinalIgnoreCase) ||
+        errorText.Contains("n challenge solving failed", StringComparison.OrdinalIgnoreCase) ||
+        errorText.Contains("JavaScript runtime", StringComparison.OrdinalIgnoreCase);
+
+    private static async Task<(int ExitCode, string ErrorText)> RunYtDlpAsync(
+        string ytDlp,
+        string workingDirectory,
+        string[] arguments,
+        IProgress<DownloadProgressUpdate> progress,
+        CancellationToken cancellationToken)
+    {
         var psi = new ProcessStartInfo
         {
             FileName = ytDlp,
-            Arguments = arguments,
-            WorkingDirectory = request.OutputDirectory,
+            WorkingDirectory = workingDirectory,
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -48,11 +155,15 @@ public sealed class YtDlpVideoDownloadService : IVideoDownloadService
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8
         };
+        foreach (var arg in arguments)
+        {
+            psi.ArgumentList.Add(arg);
+        }
 
         using var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
         var stderrLines = new List<string>();
 
-        process.OutputDataReceived += (_, e) => HandleLine(e.Data, progress);
+        process.OutputDataReceived += (_, e) => HandleLine(e.Data, progress, isStdErr: false);
         process.ErrorDataReceived += (_, e) =>
         {
             if (!string.IsNullOrWhiteSpace(e.Data))
@@ -63,7 +174,7 @@ public sealed class YtDlpVideoDownloadService : IVideoDownloadService
                 }
             }
 
-            HandleLine(e.Data, progress);
+            HandleLine(e.Data, progress, isStdErr: true);
         };
 
         try
@@ -96,85 +207,15 @@ public sealed class YtDlpVideoDownloadService : IVideoDownloadService
             }
         });
 
-        try
-        {
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
+        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
 
-        if (process.ExitCode != 0)
+        string errorText;
+        lock (stderrLines)
         {
-            string errorText;
-            lock (stderrLines)
-            {
-                errorText = string.Join(Environment.NewLine, stderrLines);
-            }
-
-            if (YtDlpAuthErrorClassifier.IsAuthenticationFailure(errorText))
-            {
-                throw new InvalidOperationException(
-                    "Authentication failed or expired. Reconnect your YouTube session and retry.");
-            }
-
-            throw new InvalidOperationException($"yt-dlp failed with exit code {process.ExitCode}. See activity log for details.");
+            errorText = string.Join(Environment.NewLine, stderrLines);
         }
 
-        progress.Report(new DownloadProgressUpdate(1.0, "Finished."));
-    }
-
-    private static string BuildArguments(DownloadRequest request)
-    {
-        var args = new List<string>
-        {
-            "--newline",
-            "--no-warnings",
-            "--ignore-errors",
-            "--restrict-filenames",
-            "--extractor-retries",
-            "3",
-            "--fragment-retries",
-            "10",
-            "--retry-sleep",
-            "1:3",
-            "-P", request.OutputDirectory,
-            "-o", "%(title).180B [%(id)s].%(ext)s"
-        };
-
-        YtDlpAuthArgumentsBuilder.AppendAuthArguments(args, request.AuthSettings);
-
-        var formatSelector = BuildFormatSelector(request);
-        if (!string.IsNullOrWhiteSpace(formatSelector))
-        {
-            args.Add("-f");
-            args.Add(formatSelector);
-        }
-
-        if (request.DownloadThumbnail)
-        {
-            args.Add("--write-thumbnail");
-            args.Add("--convert-thumbnails");
-            args.Add("jpg");
-        }
-
-        if (request.DownloadSubtitles)
-        {
-            args.Add("--write-subs");
-            args.Add("--convert-subs");
-            args.Add("srt");
-            args.Add("--sub-langs");
-            args.Add(string.IsNullOrWhiteSpace(request.SubtitleLanguage) ? "en" : request.SubtitleLanguage!.Trim());
-        }
-
-        if (!request.DownloadVideo)
-        {
-            args.Add("--skip-download");
-        }
-
-        args.Add(request.SourceUrl);
-        return string.Join(" ", args.Select(Quote));
+        return (process.ExitCode, errorText);
     }
 
     private static string BuildFormatSelector(DownloadRequest request)
@@ -184,12 +225,11 @@ public sealed class YtDlpVideoDownloadService : IVideoDownloadService
             return string.Empty;
         }
 
-        var container = request.VideoContainer.Equals("WEBM", StringComparison.OrdinalIgnoreCase) ? "webm" : "mp4";
-        var audioExt = container == "webm" ? "webm" : "m4a";
         var maxHeight = ParseMaxHeight(request.QualityLabel);
         var heightFilter = maxHeight.HasValue ? $"[height<={maxHeight.Value}]" : string.Empty;
 
-        return $"bestvideo[ext={container}]{heightFilter}+bestaudio[ext={audioExt}]/best[ext={container}]{heightFilter}/best{heightFilter}";
+        // Keep selector permissive for Shorts/edge cases, then remux to user container.
+        return $"bestvideo{heightFilter}+bestaudio/best{heightFilter}/best";
     }
 
     private static int? ParseMaxHeight(string qualityLabel)
@@ -204,24 +244,29 @@ public sealed class YtDlpVideoDownloadService : IVideoDownloadService
         return int.TryParse(digits, out var parsed) ? parsed : null;
     }
 
-    private static void HandleLine(string? line, IProgress<DownloadProgressUpdate> progress)
+    private static void HandleLine(string? line, IProgress<DownloadProgressUpdate> progress, bool isStdErr)
     {
         if (string.IsNullOrWhiteSpace(line))
         {
             return;
         }
 
-        var match = DownloadPercentRegex.Match(line);
+        var trimmed = line.Trim();
+        var match = DownloadPercentRegex.Match(trimmed);
         if (match.Success &&
             double.TryParse(match.Groups["percent"].Value, System.Globalization.CultureInfo.InvariantCulture, out var percent))
         {
-            progress.Report(new DownloadProgressUpdate(Math.Clamp(percent / 100.0, 0.0, 1.0), line.Trim()));
+            progress.Report(new DownloadProgressUpdate(Math.Clamp(percent / 100.0, 0.0, 1.0), trimmed, isStdErr));
             return;
         }
 
-        progress.Report(new DownloadProgressUpdate(0.0, line.Trim()));
+        progress.Report(new DownloadProgressUpdate(0.0, trimmed, isStdErr));
     }
 
-    private static string Quote(string value) =>
-        value.Contains(' ') ? $"\"{value.Replace("\"", "\\\"")}\"" : value;
+    private static string NormalizeUrl(string url)
+    {
+        var videoId = YoutubeUrlValidator.TryExtractVideoId(url);
+        return videoId is null ? url.Trim() : $"https://www.youtube.com/watch?v={videoId}";
+    }
+
 }

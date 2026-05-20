@@ -57,7 +57,7 @@
                         Margin="0,6,0,0"
                         FontSize="13"
                         Opacity="0.7"
-                        Text="Paste a link, Fetch info, choose what to save, Download" />
+                        Text="{Binding AppSubtitle, Mode=OneWay}" />
                 </StackPanel>
             </StackPanel>
             <CheckBox
@@ -73,6 +73,7 @@
             VerticalScrollBarVisibility="Auto">
             <Grid>
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
@@ -192,10 +193,14 @@
                                 Visibility="{Binding VideoInfo.HasThumbnail, Converter={StaticResource BoolToVis}, ConverterParameter=invert}" />
                         </Grid>
                         <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                            <TextBlock
+                            <TextBox
+                                IsReadOnly="True"
+                                BorderThickness="0"
+                                Padding="0"
+                                Background="Transparent"
                                 FontSize="20"
                                 FontWeight="SemiBold"
-                                Text="{Binding VideoInfo.Title}"
+                                Text="{Binding VideoInfo.Title, Mode=OneWay}"
                                 TextWrapping="Wrap" />
                             <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
                                 <TextBlock
@@ -203,9 +208,13 @@
                                     FontSize="14"
                                     Opacity="0.8"
                                     Text="Channel:" />
-                                <TextBlock
+                                <TextBox
                                     Margin="6,0,0,0"
                                     VerticalAlignment="Center"
+                                    IsReadOnly="True"
+                                    BorderThickness="0"
+                                    Padding="0"
+                                    Background="Transparent"
                                     FontSize="14"
                                     FontWeight="SemiBold"
                                     Opacity="0.8"
@@ -217,9 +226,13 @@
                                     FontSize="14"
                                     Opacity="0.8"
                                     Text="Duration:" />
-                                <TextBlock
+                                <TextBox
                                     Margin="6,0,0,0"
                                     VerticalAlignment="Center"
+                                    IsReadOnly="True"
+                                    BorderThickness="0"
+                                    Padding="0"
+                                    Background="Transparent"
                                     FontSize="14"
                                     FontWeight="SemiBold"
                                     Opacity="0.8"
@@ -314,39 +327,141 @@
                                     SelectedItem="{Binding VideoInfo.SelectedSubtitleLanguage, Mode=TwoWay}" />
                             </StackPanel>
                         </Grid>
-                        <Grid Grid.Row="3" Margin="0,14,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                <TextBlock Margin="0,0,0,6" Opacity="0.75" Text="Auth mode" />
-                                <ComboBox
-                                    ItemsSource="{Binding Options.AuthModes}"
-                                    SelectedItem="{Binding Options.SelectedAuthMode, Mode=TwoWay}" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Margin="0,0,12,0">
-                                <TextBlock Margin="0,0,0,6" Opacity="0.75" Text="Browser" />
-                                <ComboBox
-                                    ItemsSource="{Binding Options.BrowserOptions}"
-                                    SelectedItem="{Binding Options.SelectedBrowser, Mode=TwoWay}" />
-                                <TextBox
-                                    Margin="0,6,0,0"
-                                    Header="Profile"
-                                    Text="{Binding Options.BrowserProfile, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="2">
-                                <TextBlock Margin="0,0,0,6" Opacity="0.75" Text="Cookie file path (optional)" />
-                                <TextBox
-                                    Text="{Binding Options.CookieFilePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            </StackPanel>
-                        </Grid>
                     </Grid>
                 </Border>
 
                 <Border
                     Grid.Row="4"
+                    Margin="0,14,0,0"
+                    Padding="16"
+                    Background="{ThemeResource App.Surface}"
+                    BorderBrush="{ThemeResource App.Border}"
+                    BorderThickness="1"
+                    CornerRadius="10">
+                    <StackPanel Spacing="12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock FontWeight="SemiBold" Text="YouTube sign-in" />
+                                <TextBlock
+                                    Margin="0,6,0,0"
+                                    FontSize="12"
+                                    Opacity="0.7"
+                                    Text="For age-restricted videos and bot checks. Sign in with your normal browser — no password is stored in this app."
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                            <Border
+                                Grid.Column="1"
+                                Padding="10,6"
+                                VerticalAlignment="Top"
+                                Background="#220078D4"
+                                CornerRadius="8">
+                                <TextBlock
+                                    FontSize="12"
+                                    FontWeight="SemiBold"
+                                    Text="{Binding Auth.SignInStateDisplay, Mode=OneWay}" />
+                            </Border>
+                        </Grid>
+
+                        <CheckBox
+                            Content="Use sign-in for restricted videos"
+                            IsChecked="{Binding Auth.UseSignIn, Mode=TwoWay}" />
+
+                        <TextBlock
+                            FontSize="12"
+                            Opacity="0.85"
+                            Text="{Binding Auth.StatusMessage, Mode=OneWay}"
+                            TextWrapping="Wrap" />
+
+                        <Grid Visibility="{Binding Auth.ShowBrowserFields, Converter={StaticResource BoolToVis}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                <TextBlock Margin="0,0,0,6" Opacity="0.75" Text="Browser" />
+                                <ComboBox
+                                    DisplayMemberPath="DisplayName"
+                                    ItemsSource="{Binding Auth.Browsers}"
+                                    SelectedItem="{Binding Auth.SelectedBrowser, Mode=TwoWay}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Margin="0,0,0,6" Opacity="0.75" Text="Account" />
+                                <ComboBox
+                                    DisplayMemberPath="DisplayName"
+                                    ItemsSource="{Binding Auth.Profiles}"
+                                    SelectedItem="{Binding Auth.SelectedProfile, Mode=TwoWay}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Visibility="{Binding Auth.ShowCookieFields, Converter={StaticResource BoolToVis}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox
+                                PlaceholderText="cookies.txt"
+                                Text="{Binding Auth.CookieFilePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button
+                                Grid.Column="1"
+                                Margin="10,0,0,0"
+                                Padding="14,8"
+                                Command="{Binding Auth.BrowseCookieFileCommand}"
+                                Content="Browse…" />
+                        </Grid>
+
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Button
+                                Padding="14,8"
+                                Command="{Binding Auth.OpenYouTubeCommand}"
+                                Content="Open YouTube in browser" />
+                            <Button
+                                Padding="14,8"
+                                Background="{ThemeResource App.Accent}"
+                                BorderThickness="0"
+                                Command="{Binding Auth.TestConnectionCommand}"
+                                Content="Test connection"
+                                FontWeight="SemiBold"
+                                Foreground="White" />
+                            <ProgressRing
+                                Width="24"
+                                Height="24"
+                                IsActive="{Binding Auth.IsChecking, Mode=OneWay}"
+                                Visibility="{Binding Auth.IsChecking, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+
+                        <Expander
+                            Header="Advanced"
+                            IsExpanded="{Binding Auth.IsAdvancedExpanded, Mode=TwoWay}">
+                            <StackPanel Spacing="10">
+                                <CheckBox
+                                    Content="Use cookie file instead of browser (advanced)"
+                                    IsChecked="{Binding Auth.UseCookieFile, Mode=TwoWay}" />
+                                <StackPanel Visibility="{Binding Auth.ShowBrowserFields, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock
+                                        Margin="0,0,0,6"
+                                        FontSize="12"
+                                        Opacity="0.75"
+                                        Text="Manual profile name (only if your account is not listed)" />
+                                    <TextBox
+                                        PlaceholderText="e.g. Default or Profile 2"
+                                        Text="{Binding Auth.ManualProfileOverride, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <TextBlock
+                                    FontSize="11"
+                                    Opacity="0.6"
+                                    Text="Tip: Export cookies in Netscape format only if browser sign-in does not work."
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Expander>
+                    </StackPanel>
+                </Border>
+
+                <Border
+                    Grid.Row="5"
                     Margin="0,14,0,0"
                     Padding="16"
                     Background="{ThemeResource App.Surface}"
@@ -392,7 +507,7 @@
                 </Border>
 
                 <Border
-                    Grid.Row="5"
+                    Grid.Row="6"
                     Margin="0,14,0,0"
                     Padding="16"
                     Background="{ThemeResource App.Surface}"
@@ -447,7 +562,7 @@
                 </Border>
 
                 <Border
-                    Grid.Row="6"
+                    Grid.Row="7"
                     Margin="0,14,0,0"
                     MinHeight="200"
                     Padding="12"
@@ -477,34 +592,21 @@
                                 Command="{Binding ClearLogCommand}"
                                 Content="Clear log" />
                         </Grid>
-                        <ListView
+                        <ScrollViewer
                             Grid.Row="1"
-                            Background="Transparent"
-                            BorderThickness="0"
-                            ItemsSource="{Binding ActivityLog}"
-                            SelectionMode="None">
-                            <ListView.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock
-                                        Margin="0,2"
-                                        FontFamily="Consolas"
-                                        FontSize="12"
-                                        Foreground="{Binding IsStdErr, Converter={StaticResource StdErrToBrush}}"
-                                        Text="{Binding FormattedLine}"
-                                        TextWrapping="Wrap" />
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                            <ListView.ItemContainerStyle>
-                                <Style TargetType="ListViewItem">
-                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                    <Setter Property="Padding" Value="2,0" />
-                                    <Setter Property="Margin" Value="0" />
-                                    <Setter Property="BorderThickness" Value="0" />
-                                    <Setter Property="Background" Value="Transparent" />
-                                    <Setter Property="IsTabStop" Value="False" />
-                                </Style>
-                            </ListView.ItemContainerStyle>
-                        </ListView>
+                            HorizontalScrollBarVisibility="Auto"
+                            VerticalScrollBarVisibility="Auto">
+                            <TextBox
+                                MinHeight="160"
+                                AcceptsReturn="True"
+                                BorderThickness="0"
+                                Background="Transparent"
+                                FontFamily="Consolas"
+                                FontSize="12"
+                                IsReadOnly="True"
+                                Text="{Binding ActivityLogText, Mode=OneWay}"
+                                TextWrapping="Wrap" />
+                        </ScrollViewer>
                     </Grid>
                 </Border>
             </Grid>
