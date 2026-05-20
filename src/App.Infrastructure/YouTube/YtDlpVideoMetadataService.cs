@@ -18,7 +18,10 @@ public sealed class YtDlpVideoMetadataService : IVideoMetadataService
         _logger = logger;
     }
 
-    public async Task<VideoMetadataDto> FetchMetadataAsync(string url, CancellationToken cancellationToken = default)
+    public async Task<VideoMetadataDto> FetchMetadataAsync(
+        string url,
+        YouTubeAuthSettings? authSettings = null,
+        CancellationToken cancellationToken = default)
     {
         if (!YoutubeUrlValidator.IsValid(url))
         {
@@ -31,10 +34,14 @@ public sealed class YtDlpVideoMetadataService : IVideoMetadataService
             throw new InvalidOperationException("yt-dlp was not found. Bundle yt-dlp.exe with the app or install it on PATH.");
         }
 
+        var arguments = new List<string> { "--dump-single-json", "--no-warnings", "--extractor-retries", "3" };
+        YtDlpAuthArgumentsBuilder.AppendAuthArguments(arguments, authSettings);
+        arguments.Add(url);
+
         var psi = new ProcessStartInfo
         {
             FileName = ytDlp,
-            Arguments = $"--dump-single-json --no-warnings {Quote(url)}",
+            Arguments = string.Join(" ", arguments.Select(Quote)),
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -97,6 +104,12 @@ public sealed class YtDlpVideoMetadataService : IVideoMetadataService
         if (process.ExitCode != 0)
         {
             var error = stderr.ToString().Trim();
+            if (YtDlpAuthErrorClassifier.IsAuthenticationFailure(error))
+            {
+                throw new InvalidOperationException(
+                    "Authentication is required or expired for this video. Update YouTube sign-in settings and try again.");
+            }
+
             throw new InvalidOperationException(string.IsNullOrWhiteSpace(error)
                 ? $"yt-dlp metadata fetch failed with exit code {process.ExitCode}."
                 : error);

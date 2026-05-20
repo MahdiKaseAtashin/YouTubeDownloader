@@ -183,6 +183,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         OutputFolder = folder ?? string.Empty;
         IsOutputFolderValid = Directory.Exists(OutputFolder.Trim());
+        ApplyAuthSettings(_preferences.YouTubeAuthSettings);
         AppendLog("Ready. Paste a URL and fetch metadata.", false);
     }
 
@@ -245,7 +246,11 @@ public sealed partial class MainViewModel : ObservableObject
 
         try
         {
-            var dto = await _metadata.FetchMetadataAsync(Url.Trim(), CancellationToken.None).ConfigureAwait(true);
+            await SaveAuthPreferenceAsync().ConfigureAwait(true);
+            var dto = await _metadata.FetchMetadataAsync(
+                Url.Trim(),
+                BuildAuthSettings(),
+                CancellationToken.None).ConfigureAwait(true);
             var vm = MapToVideoInfo(dto);
             VideoInfo = vm;
             await LoadThumbnailAsync(vm, dto.ThumbnailUrl).ConfigureAwait(true);
@@ -255,7 +260,7 @@ public sealed partial class MainViewModel : ObservableObject
         catch (Exception ex)
         {
             StatusMessage = "Could not fetch metadata.";
-            AppendLog(ex.Message, true);
+            AppendLog(GetFriendlyError(ex.Message), true);
         }
         finally
         {
@@ -346,7 +351,10 @@ public sealed partial class MainViewModel : ObservableObject
                 Options.DownloadVideo,
                 Options.DownloadThumbnail,
                 Options.DownloadSubtitles,
-                VideoInfo.SelectedSubtitleLanguage);
+                VideoInfo.SelectedSubtitleLanguage,
+                BuildAuthSettings());
+
+            await SaveAuthPreferenceAsync().ConfigureAwait(true);
 
             var progress = new Progress<DownloadProgressUpdate>(u =>
             {
@@ -371,7 +379,7 @@ public sealed partial class MainViewModel : ObservableObject
         catch (Exception ex)
         {
             StatusMessage = "Download failed.";
-            AppendLog(ex.Message, true);
+            AppendLog(GetFriendlyError(ex.Message), true);
         }
         finally
         {
@@ -385,6 +393,44 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     private void CancelDownload() => _downloadCts?.Cancel();
+
+    private YouTubeAuthSettings BuildAuthSettings() =>
+        new(
+            Options.SelectedAuthMode,
+            Options.SelectedBrowser,
+            Options.BrowserProfile,
+            Options.CookieFilePath);
+
+    private void ApplyAuthSettings(YouTubeAuthSettings settings)
+    {
+        Options.SelectedAuthMode = settings.Mode;
+        Options.SelectedBrowser = string.IsNullOrWhiteSpace(settings.Browser) ? "edge" : settings.Browser!;
+        Options.BrowserProfile = string.IsNullOrWhiteSpace(settings.BrowserProfile) ? "Default" : settings.BrowserProfile!;
+        Options.CookieFilePath = settings.CookieFilePath ?? string.Empty;
+    }
+
+    private async Task SaveAuthPreferenceAsync()
+    {
+        try
+        {
+            await _preferences.SaveYouTubeAuthSettingsAsync(BuildAuthSettings()).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AppendLog("Could not save auth preference: " + ex.Message, true);
+        }
+    }
+
+    private static string GetFriendlyError(string rawMessage)
+    {
+        if (rawMessage.Contains("Authentication is required", StringComparison.OrdinalIgnoreCase) ||
+            rawMessage.Contains("Authentication failed", StringComparison.OrdinalIgnoreCase))
+        {
+            return "YouTube sign-in is required or expired. Update authentication settings and retry.";
+        }
+
+        return rawMessage;
+    }
 
     private void AppendLog(string message, bool isError)
     {

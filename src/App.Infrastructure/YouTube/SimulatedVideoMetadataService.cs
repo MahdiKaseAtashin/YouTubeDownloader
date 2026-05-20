@@ -17,7 +17,10 @@ public sealed class SimulatedVideoMetadataService : IVideoMetadataService
         _logger = logger;
     }
 
-    public async Task<VideoMetadataDto> FetchMetadataAsync(string url, CancellationToken cancellationToken = default)
+    public async Task<VideoMetadataDto> FetchMetadataAsync(
+        string url,
+        YouTubeAuthSettings? authSettings = null,
+        CancellationToken cancellationToken = default)
     {
         await Task.Delay(Random.Shared.Next(450, 900), cancellationToken).ConfigureAwait(false);
 

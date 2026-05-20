@@ -50,9 +50,21 @@ public sealed class YtDlpVideoDownloadService : IVideoDownloadService
         };
 
         using var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
+        var stderrLines = new List<string>();
 
         process.OutputDataReceived += (_, e) => HandleLine(e.Data, progress);
-        process.ErrorDataReceived += (_, e) => HandleLine(e.Data, progress);
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (!string.IsNullOrWhiteSpace(e.Data))
+            {
+                lock (stderrLines)
+                {
+                    stderrLines.Add(e.Data);
+                }
+            }
+
+            HandleLine(e.Data, progress);
+        };
 
         try
         {
@@ -95,6 +107,18 @@ public sealed class YtDlpVideoDownloadService : IVideoDownloadService
 
         if (process.ExitCode != 0)
         {
+            string errorText;
+            lock (stderrLines)
+            {
+                errorText = string.Join(Environment.NewLine, stderrLines);
+            }
+
+            if (YtDlpAuthErrorClassifier.IsAuthenticationFailure(errorText))
+            {
+                throw new InvalidOperationException(
+                    "Authentication failed or expired. Reconnect your YouTube session and retry.");
+            }
+
             throw new InvalidOperationException($"yt-dlp failed with exit code {process.ExitCode}. See activity log for details.");
         }
 
@@ -109,9 +133,17 @@ public sealed class YtDlpVideoDownloadService : IVideoDownloadService
             "--no-warnings",
             "--ignore-errors",
             "--restrict-filenames",
+            "--extractor-retries",
+            "3",
+            "--fragment-retries",
+            "10",
+            "--retry-sleep",
+            "1:3",
             "-P", request.OutputDirectory,
             "-o", "%(title).180B [%(id)s].%(ext)s"
         };
+
+        YtDlpAuthArgumentsBuilder.AppendAuthArguments(args, request.AuthSettings);
 
         var formatSelector = BuildFormatSelector(request);
         if (!string.IsNullOrWhiteSpace(formatSelector))

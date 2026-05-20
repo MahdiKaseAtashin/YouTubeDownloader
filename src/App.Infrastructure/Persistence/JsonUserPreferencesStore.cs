@@ -1,4 +1,5 @@
 using System.Text.Json;
+using App.Application.Dtos;
 using App.Application.Ports;
 using Microsoft.Extensions.Logging;
 
@@ -23,6 +24,7 @@ public sealed class JsonUserPreferencesStore : IUserPreferencesStore
     }
 
     public string? LastOutputFolder { get; private set; }
+    public YouTubeAuthSettings YouTubeAuthSettings { get; private set; } = new(YouTubeAuthMode.None, null, null, null);
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
@@ -39,11 +41,17 @@ public sealed class JsonUserPreferencesStore : IUserPreferencesStore
             var dto = await JsonSerializer.DeserializeAsync<PrefsDto>(stream, JsonOptions, cancellationToken)
                 .ConfigureAwait(false);
             LastOutputFolder = string.IsNullOrWhiteSpace(dto?.LastOutputFolder) ? null : dto.LastOutputFolder;
+            YouTubeAuthSettings = new YouTubeAuthSettings(
+                dto?.AuthMode ?? YouTubeAuthMode.None,
+                Normalize(dto?.AuthBrowser),
+                Normalize(dto?.AuthBrowserProfile),
+                Normalize(dto?.AuthCookieFilePath));
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Could not load preferences");
             LastOutputFolder = null;
+            YouTubeAuthSettings = new YouTubeAuthSettings(YouTubeAuthMode.None, null, null, null);
         }
         finally
         {
@@ -57,7 +65,14 @@ public sealed class JsonUserPreferencesStore : IUserPreferencesStore
         try
         {
             LastOutputFolder = folderPath;
-            var dto = new PrefsDto { LastOutputFolder = folderPath };
+            var dto = new PrefsDto
+            {
+                LastOutputFolder = folderPath,
+                AuthMode = YouTubeAuthSettings.Mode,
+                AuthBrowser = YouTubeAuthSettings.Browser,
+                AuthBrowserProfile = YouTubeAuthSettings.BrowserProfile,
+                AuthCookieFilePath = YouTubeAuthSettings.CookieFilePath
+            };
             var temp = _paths.PreferencesFilePath + ".tmp";
             await using (var stream = File.Create(temp))
             {
@@ -73,8 +88,50 @@ public sealed class JsonUserPreferencesStore : IUserPreferencesStore
         }
     }
 
+    public async Task SaveYouTubeAuthSettingsAsync(YouTubeAuthSettings settings, CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            YouTubeAuthSettings = new YouTubeAuthSettings(
+                settings.Mode,
+                Normalize(settings.Browser),
+                Normalize(settings.BrowserProfile),
+                Normalize(settings.CookieFilePath));
+
+            var dto = new PrefsDto
+            {
+                LastOutputFolder = LastOutputFolder,
+                AuthMode = YouTubeAuthSettings.Mode,
+                AuthBrowser = YouTubeAuthSettings.Browser,
+                AuthBrowserProfile = YouTubeAuthSettings.BrowserProfile,
+                AuthCookieFilePath = YouTubeAuthSettings.CookieFilePath
+            };
+
+            var temp = _paths.PreferencesFilePath + ".tmp";
+            await using (var stream = File.Create(temp))
+            {
+                await JsonSerializer.SerializeAsync(stream, dto, JsonOptions, cancellationToken).ConfigureAwait(false);
+            }
+
+            File.Copy(temp, _paths.PreferencesFilePath, overwrite: true);
+            File.Delete(temp);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    private static string? Normalize(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
     private sealed class PrefsDto
     {
         public string? LastOutputFolder { get; set; }
+        public YouTubeAuthMode AuthMode { get; set; } = YouTubeAuthMode.None;
+        public string? AuthBrowser { get; set; }
+        public string? AuthBrowserProfile { get; set; }
+        public string? AuthCookieFilePath { get; set; }
     }
 }

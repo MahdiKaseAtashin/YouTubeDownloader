@@ -9,4 +9,5 @@ public sealed record DownloadRequest(
     bool DownloadVideo,
     bool DownloadThumbnail,
     bool DownloadSubtitles,
-    string? SubtitleLanguage);
+    string? SubtitleLanguage,
+    YouTubeAuthSettings? AuthSettings);

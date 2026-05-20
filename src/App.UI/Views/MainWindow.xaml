@@ -101,6 +101,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <TextBlock Text="Video URL"
                                    FontWeight="SemiBold"
@@ -276,6 +277,35 @@
                                 <ComboBox ItemsSource="{Binding VideoInfo.SubtitleLanguages}"
                                           SelectedItem="{Binding VideoInfo.SelectedSubtitleLanguage, Mode=TwoWay}"
                                           IsEnabled="{Binding IsSubtitlePickerEnabled}" />
+                            </StackPanel>
+                        </Grid>
+                        <Grid Grid.Row="3" Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                <TextBlock Text="Auth mode"
+                                           Opacity="0.75"
+                                           Margin="0,0,0,6" />
+                                <ComboBox ItemsSource="{Binding Options.AuthModes}"
+                                          SelectedItem="{Binding Options.SelectedAuthMode, Mode=TwoWay}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                                <TextBlock Text="Browser"
+                                           Opacity="0.75"
+                                           Margin="0,0,0,6" />
+                                <ComboBox ItemsSource="{Binding Options.BrowserOptions}"
+                                          SelectedItem="{Binding Options.SelectedBrowser, Mode=TwoWay}" />
+                                <TextBox Margin="0,6,0,0"
+                                         Text="{Binding Options.BrowserProfile, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Cookie file path (optional)"
+                                           Opacity="0.75"
+                                           Margin="0,0,0,6" />
+                                <TextBox Text="{Binding Options.CookieFilePath, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                         </Grid>
                     </Grid>
