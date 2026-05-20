@@ -88,6 +88,7 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <!-- URL input -->
@@ -469,8 +470,45 @@
                     </Grid>
                 </Border>
 
-                <!-- Download CTA -->
+                <!-- Batch download -->
                 <Border Grid.Row="6"
+                        Margin="0,14,0,0"
+                        Padding="16"
+                        CornerRadius="10"
+                        Background="{DynamicResource App.Surface}"
+                        BorderBrush="{DynamicResource App.Border}"
+                        BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock Text="Batch download"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,8" />
+                        <TextBlock FontSize="12"
+                                   Opacity="0.75"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,8"
+                                   Text="One YouTube link per line. Each item saves to a subfolder named 1-video-title, 2-another-title, … under the folder above." />
+                        <TextBox MinHeight="120"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 Text="{Binding BatchUrlsText, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Margin="0,8,0,8"
+                                   FontSize="12"
+                                   Opacity="0.75"
+                                   Text="{Binding BatchLinkCountLabel}" />
+                        <Button Content="Batch download"
+                                HorizontalAlignment="Left"
+                                Padding="20,10"
+                                FontWeight="SemiBold"
+                                Background="{DynamicResource App.Accent}"
+                                Foreground="White"
+                                BorderThickness="0"
+                                Command="{Binding BatchDownloadCommand}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Download CTA -->
+                <Border Grid.Row="7"
                         Margin="0,14,0,0"
                         Padding="16"
                         CornerRadius="10"
@@ -521,7 +559,7 @@
                 </Border>
 
                 <!-- Activity log -->
-                <Border Grid.Row="7"
+                <Border Grid.Row="8"
                         Margin="0,14,0,0"
                         Padding="12"
                         CornerRadius="10"

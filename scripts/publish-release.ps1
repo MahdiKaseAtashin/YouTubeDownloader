@@ -56,11 +56,19 @@ Run: double-click YouTubeDownloader.exe (from this folder).
 
 Requirements: Windows 10 version 1903 (build 18362) or later. Install the x64 Visual C++ Redistributable if the app fails to start: https://aka.ms/vs/17/release/vc_redist.x64.exe
 
+Bundled with this build: yt-dlp.exe, ffmpeg.exe, ffprobe.exe, node.exe (no separate install needed for downloads).
+
 Data and logs: %LOCALAPPDATA%\YouTubeDownloader\
 
 Built with: $builtWith$extra
 "@
     Set-Content -LiteralPath $readme -Value $body -Encoding UTF8
+}
+
+Get-Process YouTubeDownloader -ErrorAction SilentlyContinue | Stop-Process -Force
+
+if (Test-Path -LiteralPath $out) {
+    Remove-Item -LiteralPath $out -Recurse -Force
 }
 
 New-Item -ItemType Directory -Force -Path $out | Out-Null
@@ -74,19 +82,36 @@ if ($msbuild) {
     Write-Host "Using Visual Studio MSBuild: $msbuild"
 }
 
-if (-not (Test-Path -LiteralPath $bundledYtDlp)) {
-    Write-Warning "Bundled yt-dlp not found at: $bundledYtDlp"
-    Write-Warning "Run scripts/install-yt-dlp.ps1 to include yt-dlp in setup."
+function Ensure-BundledTool {
+    param(
+        [string]$Path,
+        [string]$InstallScriptName,
+        [string]$Label
+    )
+
+    if (Test-Path -LiteralPath $Path) {
+        return
+    }
+
+    Write-Host "$Label not found. Running $InstallScriptName..."
+    $script = Join-Path $PSScriptRoot $InstallScriptName
+    if (-not (Test-Path -LiteralPath $script)) {
+        throw "Missing install script: $script"
+    }
+
+    & $script
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "Failed to install $Label at: $Path"
+    }
 }
 
-if (-not (Test-Path -LiteralPath $bundledFfmpeg)) {
-    Write-Warning "Bundled ffmpeg not found at: $bundledFfmpeg"
-    Write-Warning "Run scripts/install-ffmpeg.ps1 to include ffmpeg in setup."
-}
+Ensure-BundledTool $bundledYtDlp "install-yt-dlp.ps1" "yt-dlp"
+Ensure-BundledTool $bundledFfmpeg "install-ffmpeg.ps1" "ffmpeg"
+Ensure-BundledTool $bundledNode "install-node.ps1" "Node.js"
 
-if (-not (Test-Path -LiteralPath $bundledNode)) {
-    Write-Warning "Bundled Node.js not found at: $bundledNode"
-    Write-Warning "Run scripts/install-node.ps1 for signed-in YouTube downloads."
+$bundledFfprobe = Join-Path $root "src/App.WinUI/tools/ffprobe.exe"
+if (-not (Test-Path -LiteralPath $bundledFfprobe)) {
+    throw "ffprobe.exe is required but missing at: $bundledFfprobe (re-run scripts/install-ffmpeg.ps1)."
 }
 
 if ($SingleFile) {
@@ -158,8 +183,14 @@ Get-ChildItem -LiteralPath $out -Filter "*.pdb" -ErrorAction SilentlyContinue | 
 Write-Host ""
 Write-Host "Done. Main executable:"
 Write-Host "  $(Join-Path $out 'YouTubeDownloader.exe')"
-if (Test-Path -LiteralPath (Join-Path $out 'yt-dlp.exe')) {
-    Write-Host "  $(Join-Path $out 'yt-dlp.exe')"
+foreach ($tool in @('yt-dlp.exe', 'ffmpeg.exe', 'ffprobe.exe', 'node.exe')) {
+    $toolPath = Join-Path $out $tool
+    if (Test-Path -LiteralPath $toolPath) {
+        Write-Host "  $toolPath"
+    }
+    else {
+        throw "Publish output is missing required tool: $tool"
+    }
 }
 Write-Host ""
 

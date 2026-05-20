@@ -31,14 +31,21 @@ WinUI needs packaged resources. This repo sets **`EnableMsixTooling`** so `dotne
 
 **Unpackaged WinUI + `PublishSingleFile` is not reliable** (startup may fail with COM `0x80040111` at `Application.Start`). The default script publishes a **self-contained folder**: run `YouTubeDownloader.exe` from that folder and keep all files beside it (xcopy / zip the whole directory).
 
+Install bundled tools first (required for a complete release — yt-dlp, ffmpeg, ffprobe, node):
+
 ```powershell
+.\scripts\install-tools.ps1
 .\scripts\publish-release.ps1
+.\scripts\build-installer.ps1
 ```
+
+`publish-release.ps1` auto-downloads any missing tools before publishing.
 
 Output:
 
-- **`artifacts\portable\`** — `YouTubeDownloader.exe`, `resources.pri`, Windows App SDK + .NET runtime files (~hundreds of MB total).
+- **`artifacts\portable\`** — `YouTubeDownloader.exe`, `yt-dlp.exe`, `ffmpeg.exe`, `ffprobe.exe`, `node.exe`, `resources.pri`, and runtime files.
 - **`artifacts\YouTubeDownloader-portable-win-x64.zip`** — zip of the whole portable folder.
+- **`artifacts\installer\YouTubeDownloader-Setup-1.0.4.exe`** — Windows installer (bundles everything; no separate tool installs needed).
 
 Optional (not recommended): single-file exe — `.\scripts\publish-release.ps1 -SingleFile`
 
@@ -46,10 +53,11 @@ Skip the zip: `.\scripts\publish-release.ps1 -SkipZip`
 
 ## Installer (Inno Setup)
 
-1. Run `.\scripts\publish-release.ps1 -OutputRelative artifacts\release` (or copy from `artifacts\portable` after a default publish).
-2. Open `installer\YouTubeDownloader.iss` in Inno Setup 6.
-3. Confirm `[Files]` points at `..\artifacts\release\*`.
-4. Compile — output: `artifacts\installer\YouTubeDownloader-Setup-1.0.3.exe`.
+The installer copies the full portable folder into `{app}` — users get the app plus yt-dlp, ffmpeg, and Node.js in one setup.
+
+1. Run `.\scripts\install-tools.ps1` and `.\scripts\publish-release.ps1`.
+2. Run `.\scripts\build-installer.ps1` (requires [Inno Setup 6](https://jrsoftware.org/isinfo.php)), or open `installer\YouTubeDownloader.iss` and compile manually.
+3. Output: `artifacts\installer\YouTubeDownloader-Setup-1.0.4.exe`.
 
 ## Data locations
 

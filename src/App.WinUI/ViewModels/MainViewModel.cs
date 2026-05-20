@@ -44,6 +44,7 @@ public sealed partial class MainViewModel : ObservableObject
     public ICommand PasteFromClipboardCommand { get; }
     public ICommand BrowseOutputFolderCommand { get; }
     public ICommand DownloadCommand { get; }
+    public ICommand BatchDownloadCommand { get; }
     public ICommand CancelDownloadCommand { get; }
     public ICommand ClearLogCommand { get; }
 
@@ -72,6 +73,7 @@ public sealed partial class MainViewModel : ObservableObject
         PasteFromClipboardCommand = new AsyncRelayCommand(PasteFromClipboardAsync, () => !IsFetching && !IsDownloading);
         BrowseOutputFolderCommand = new AsyncRelayCommand(BrowseFolderAsync, () => !IsDownloading);
         DownloadCommand = new AsyncRelayCommand(DownloadAsync, CanDownload);
+        BatchDownloadCommand = new AsyncRelayCommand(BatchDownloadAsync, CanBatchDownload);
         CancelDownloadCommand = new DelegateCommand(_ => CancelDownload(), _ => IsDownloading);
         ClearLogCommand = new DelegateCommand(_ =>
         {
@@ -93,10 +95,17 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void RaiseFetchCanExecute() => ((AsyncRelayCommand)FetchInfoCommand).RaiseCanExecuteChanged();
 
-    private void RaiseDownloadCanExecute() => ((AsyncRelayCommand)DownloadCommand).RaiseCanExecuteChanged();
+    private void RaiseDownloadCanExecute()
+    {
+        ((AsyncRelayCommand)DownloadCommand).RaiseCanExecuteChanged();
+        ((AsyncRelayCommand)BatchDownloadCommand).RaiseCanExecuteChanged();
+    }
 
     [ObservableProperty]
     private string _url = string.Empty;
+
+    [ObservableProperty]
+    private string _batchUrlsText = string.Empty;
 
     [ObservableProperty]
     private bool _isUrlValid;
@@ -130,6 +139,12 @@ public sealed partial class MainViewModel : ObservableObject
 
     public bool HasVideoInfo => VideoInfo is not null;
 
+    public int BatchLinkCount => YoutubeUrlParser.ParseLines(BatchUrlsText).Count;
+
+    public bool HasBatchLinks => BatchLinkCount > 0;
+
+    public string BatchLinkCountLabel => $"{BatchLinkCount} valid link(s) detected";
+
     public string AppVersion { get; } = AppVersionInfo.Display;
 
     public string AppSubtitle =>
@@ -148,6 +163,14 @@ public sealed partial class MainViewModel : ObservableObject
     partial void OnOutputFolderChanged(string value)
     {
         IsOutputFolderValid = Directory.Exists(value?.Trim());
+        RaiseDownloadCanExecute();
+    }
+
+    partial void OnBatchUrlsTextChanged(string value)
+    {
+        OnPropertyChanged(nameof(BatchLinkCount));
+        OnPropertyChanged(nameof(BatchLinkCountLabel));
+        OnPropertyChanged(nameof(HasBatchLinks));
         RaiseDownloadCanExecute();
     }
 
@@ -190,6 +213,13 @@ public sealed partial class MainViewModel : ObservableObject
 
     private bool CanDownload() =>
         VideoInfo is not null
+        && IsOutputFolderValid
+        && !IsDownloading
+        && !IsFetching
+        && (Options.DownloadVideo || Options.DownloadThumbnail || Options.DownloadSubtitles);
+
+    private bool CanBatchDownload() =>
+        HasBatchLinks
         && IsOutputFolderValid
         && !IsDownloading
         && !IsFetching
@@ -407,34 +437,16 @@ public sealed partial class MainViewModel : ObservableObject
 
         try
         {
-            var request = new DownloadRequest(
+            await Auth.SavePreferencesAsync().ConfigureAwait(true);
+
+            var request = CreateDownloadRequest(
                 Url.Trim(),
                 OutputFolder.Trim(),
                 VideoInfo.SelectedFormat.Id,
-                Options.SelectedVideoContainer,
-                Options.SelectedQuality,
-                Options.DownloadVideo,
-                Options.DownloadThumbnail,
-                Options.DownloadSubtitles,
-                VideoInfo.SelectedSubtitleLanguage,
-                Auth.BuildSettings());
+                VideoInfo.SelectedSubtitleLanguage);
 
-            await Auth.SavePreferencesAsync().ConfigureAwait(true);
-
-            var progress = new Progress<DownloadProgressUpdate>(u =>
-            {
-                _dispatcherQueue.TryEnqueue(() =>
-                {
-                    ProgressPercent = Math.Clamp(u.Fraction * 100.0, 0, 100);
-                    StatusMessage = u.StepMessage;
-                    if (ShouldLogProgressLine(u))
-                    {
-                        AppendLog(u.StepMessage, u.IsStdErr);
-                    }
-                });
-            });
-
-            await _downloader.DownloadAsync(request, progress, token).ConfigureAwait(true);
+            await RunDownloadAsync(request, token, logPrefix: null, overallFractionOffset: 0, overallFractionScale: 1)
+                .ConfigureAwait(true);
 
             StatusMessage = "All done.";
             AppendLog("Download completed successfully.", false);
@@ -459,6 +471,160 @@ public sealed partial class MainViewModel : ObservableObject
             RaiseDownloadCanExecute();
             ((DelegateCommand)CancelDownloadCommand).RaiseCanExecuteChanged();
         }
+    }
+
+    private async Task BatchDownloadAsync()
+    {
+        var urls = YoutubeUrlParser.ParseLines(BatchUrlsText);
+        if (urls.Count == 0 || !IsOutputFolderValid)
+        {
+            return;
+        }
+
+        _downloadCts?.Cancel();
+        _downloadCts?.Dispose();
+        _downloadCts = new CancellationTokenSource();
+        var token = _downloadCts.Token;
+
+        IsDownloading = true;
+        ProgressPercent = 0;
+        StatusMessage = $"Batch download: 0/{urls.Count}";
+        AppendLog($"Starting batch download ({urls.Count} links)…", false);
+
+        var parentFolder = OutputFolder.Trim();
+        var succeeded = 0;
+        var failed = 0;
+
+        try
+        {
+            await Auth.SavePreferencesAsync().ConfigureAwait(true);
+
+            for (var i = 0; i < urls.Count; i++)
+            {
+                token.ThrowIfCancellationRequested();
+
+                var index = i + 1;
+                var prefix = $"[{index}/{urls.Count}]";
+
+                AppendLog($"{prefix} URL: {urls[i]}", false);
+
+                try
+                {
+                    StatusMessage = $"{prefix} Fetching metadata…";
+                    var dto = await _metadata.FetchMetadataAsync(
+                        urls[i],
+                        Auth.BuildSettings(),
+                        token).ConfigureAwait(true);
+
+                    var folderName = BatchDownloadFolderNamer.CreateUnique(
+                        parentFolder,
+                        index,
+                        dto.Title,
+                        dto.VideoId);
+                    var itemFolder = Path.Combine(parentFolder, folderName);
+                    Directory.CreateDirectory(itemFolder);
+
+                    AppendLog($"{prefix} Folder: {itemFolder}", false);
+                    AppendLog($"{prefix} Loaded: {dto.Title}", false);
+
+                    var formatId = ResolveFormatId(dto);
+                    var subtitleLanguage = dto.SubtitleLanguages.FirstOrDefault();
+                    var request = CreateDownloadRequest(urls[i], itemFolder, formatId, subtitleLanguage);
+
+                    StatusMessage = $"{prefix} Downloading…";
+                    await RunDownloadAsync(
+                            request,
+                            token,
+                            logPrefix: prefix,
+                            overallFractionOffset: i,
+                            overallFractionScale: urls.Count)
+                        .ConfigureAwait(true);
+
+                    succeeded++;
+                    AppendLog($"{prefix} Completed.", false);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    LogException(ex);
+                    AppendLog($"{prefix} Failed.", true);
+                }
+
+                ProgressPercent = index * 100.0 / urls.Count;
+            }
+
+            StatusMessage = failed == 0
+                ? $"Batch complete ({succeeded}/{urls.Count})."
+                : $"Batch finished: {succeeded} ok, {failed} failed.";
+            AppendLog(StatusMessage, failed > 0);
+            await SaveFolderPreferenceAsync().ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = "Cancelled.";
+            AppendLog("Batch download cancelled.", true);
+        }
+        finally
+        {
+            IsDownloading = false;
+            ProgressPercent = 0;
+            _downloadCts?.Dispose();
+            _downloadCts = null;
+            RaiseDownloadCanExecute();
+            ((DelegateCommand)CancelDownloadCommand).RaiseCanExecuteChanged();
+        }
+    }
+
+    private DownloadRequest CreateDownloadRequest(
+        string sourceUrl,
+        string outputDirectory,
+        string formatId,
+        string? subtitleLanguage) =>
+        new(
+            sourceUrl,
+            outputDirectory,
+            formatId,
+            Options.SelectedVideoContainer,
+            Options.SelectedQuality,
+            Options.DownloadVideo,
+            Options.DownloadThumbnail,
+            Options.DownloadSubtitles,
+            subtitleLanguage,
+            Auth.BuildSettings());
+
+    private static string ResolveFormatId(VideoMetadataDto dto)
+    {
+        var best = dto.Formats.FirstOrDefault(f => f.Id.Equals("best", StringComparison.OrdinalIgnoreCase));
+        return best?.Id ?? dto.Formats.FirstOrDefault()?.Id ?? "best";
+    }
+
+    private async Task RunDownloadAsync(
+        DownloadRequest request,
+        CancellationToken token,
+        string? logPrefix,
+        double overallFractionOffset,
+        double overallFractionScale)
+    {
+        var progress = new Progress<DownloadProgressUpdate>(u =>
+        {
+            _dispatcherQueue.TryEnqueue(() =>
+            {
+                var itemFraction = overallFractionScale <= 0 ? u.Fraction : u.Fraction / overallFractionScale;
+                ProgressPercent = Math.Clamp((overallFractionOffset + itemFraction) * 100.0, 0, 100);
+                StatusMessage = logPrefix is null ? u.StepMessage : $"{logPrefix} {u.StepMessage}";
+                if (ShouldLogProgressLine(u))
+                {
+                    var line = logPrefix is null ? u.StepMessage : $"{logPrefix} {u.StepMessage}";
+                    AppendLog(line, u.IsStdErr);
+                }
+            });
+        });
+
+        await _downloader.DownloadAsync(request, progress, token).ConfigureAwait(true);
     }
 
     private void CancelDownload() => _downloadCts?.Cancel();
